@@ -16,6 +16,7 @@ var MEDIA_EVENTS = [
 function MediaRendererClient(url) {
   DeviceClient.call(this, url);
   this.instanceId = 0;
+  this.status = {};
 
   // Subscribe / unsubscribe from AVTransport depending
   // on relevant registered / removed event listeners.
@@ -25,9 +26,11 @@ function MediaRendererClient(url) {
 
   this.addListener('newListener', function(eventName, listener) {
     if(MEDIA_EVENTS.indexOf(eventName) === -1) return;
+    console.log('subscribe', refs);
     if(refs === 0) {
       receivedState = false;
       self.subscribe('AVTransport', onstatus);
+	    self.subscribe('RenderingControl', onstatus);
     }
     refs++;
   });
@@ -35,11 +38,17 @@ function MediaRendererClient(url) {
   this.addListener('removeListener', function(eventName, listener) {
     if(MEDIA_EVENTS.indexOf(eventName) === -1) return;
     refs--;
-    if(refs === 0) self.unsubscribe('AVTransport', onstatus);
+    console.log('unsubscribe', refs);
+    if(refs === 0) {
+    	self.unsubscribe('AVTransport', onstatus);
+	    self.unsubscribe('RenderingControl', onstatus);
+    }
   });
 
   function onstatus(e) {
-    self.emit('status', e);
+    console.log('got status event', e);
+    self.status = Object.assign(self.status, e);
+    self.emit('status', self.status);
 
     if(!receivedState) {
       // Starting from here we only want state updates.
@@ -120,6 +129,15 @@ MediaRendererClient.prototype.getDuration = function(callback) {
 };
 
 
+MediaRendererClient.prototype.getMediaInfo = function(callback) {
+  this.callAction('AVTransport', 'GetMediaInfo', { InstanceID: this.instanceId }, function(err, result) {
+    if(err) return callback(err);
+    result.MediaDuration = parseTime(result.MediaDuration)
+    callback(null, result);
+  });
+};
+
+
 MediaRendererClient.prototype.load = function(url, options, callback) {
   var self = this;
   if(typeof options === 'function') {
@@ -195,6 +213,20 @@ MediaRendererClient.prototype.stop = function(callback) {
   this.callAction('AVTransport', 'Stop', params, callback || noop);
 };
 
+MediaRendererClient.prototype.previous = function(callback) {
+	var params = {
+		InstanceID: this.instanceId
+	};
+	this.callAction('AVTransport', 'Previous', params, callback || noop);
+};
+
+MediaRendererClient.prototype.next = function(callback) {
+	var params = {
+		InstanceID: this.instanceId
+	};
+	this.callAction('AVTransport', 'Next', params, callback || noop);
+};
+
 
 MediaRendererClient.prototype.seek = function(seconds, callback) {
   var params = {
@@ -223,6 +255,22 @@ MediaRendererClient.prototype.setVolume = function(volume, callback) {
   this.callAction('RenderingControl', 'SetVolume', params, callback || noop);
 };
 
+MediaRendererClient.prototype.getMute = function(callback) {
+	this.callAction('RenderingControl', 'GetMute', { InstanceID: this.instanceId,Channel: 'Master'}, function(err, result) {
+		if(err) return callback(err);
+		callback(null, parseInt(result.CurrentMute));
+	});
+};
+
+
+MediaRendererClient.prototype.setMute = function(mute, callback) {
+	var params = {
+		InstanceID: this.instanceId,
+		Channel: 'Master',
+		DesiredMute: mute
+	};
+	this.callAction('RenderingControl', 'SetMute', params, callback || noop);
+};
 
 function formatTime(seconds) {
   var h = 0;
