@@ -26,11 +26,10 @@ function MediaRendererClient(url) {
 
   this.addListener('newListener', function(eventName, listener) {
     if(MEDIA_EVENTS.indexOf(eventName) === -1) return;
-    console.log('subscribe', refs);
     if(refs === 0) {
       receivedState = false;
       self.subscribe('AVTransport', onstatus);
-	    self.subscribe('RenderingControl', onstatus);
+      self.subscribe('RenderingControl', onstatus);
     }
     refs++;
   });
@@ -38,15 +37,13 @@ function MediaRendererClient(url) {
   this.addListener('removeListener', function(eventName, listener) {
     if(MEDIA_EVENTS.indexOf(eventName) === -1) return;
     refs--;
-    console.log('unsubscribe', refs);
     if(refs === 0) {
-    	self.unsubscribe('AVTransport', onstatus);
-	    self.unsubscribe('RenderingControl', onstatus);
+      self.unsubscribe('AVTransport', onstatus);
+      self.unsubscribe('RenderingControl', onstatus);
     }
   });
 
   function onstatus(e) {
-    console.log('got status event', e);
     self.status = Object.assign(self.status, e);
     self.emit('status', self.status);
 
@@ -87,7 +84,7 @@ util.inherits(MediaRendererClient, DeviceClient);
 MediaRendererClient.prototype.getSupportedProtocols = function(callback) {
   this.callAction('ConnectionManager', 'GetProtocolInfo', {}, function(err, result) {
     if(err) return callback(err);
-    
+
     //
     // Here we leave off the `Source` field as we're hopefuly dealing with a Sink-only device.
     //
@@ -107,6 +104,12 @@ MediaRendererClient.prototype.getSupportedProtocols = function(callback) {
   });
 };
 
+MediaRendererClient.prototype.getTransportInfo = function(callback) {
+  this.callAction('AVTransport', 'GetTransportInfo', { InstanceID: this.instanceId }, function(err, result) {
+    if(err) return callback(err);
+    callback(null, result);
+  });
+};
 
 MediaRendererClient.prototype.getPosition = function(callback) {
   this.callAction('AVTransport', 'GetPositionInfo', { InstanceID: this.instanceId }, function(err, result) {
@@ -168,7 +171,7 @@ MediaRendererClient.prototype.load = function(url, options, callback) {
       // If PrepareForConnection is not implemented, we keep the default (0) InstanceID
       //
     } else {
-      self.instanceId = result.AVTransportID;    
+      self.instanceId = result.AVTransportID;
     }
 
     var params = {
@@ -214,17 +217,17 @@ MediaRendererClient.prototype.stop = function(callback) {
 };
 
 MediaRendererClient.prototype.previous = function(callback) {
-	var params = {
-		InstanceID: this.instanceId
-	};
-	this.callAction('AVTransport', 'Previous', params, callback || noop);
+  var params = {
+    InstanceID: this.instanceId
+  };
+  this.callAction('AVTransport', 'Previous', params, callback || noop);
 };
 
 MediaRendererClient.prototype.next = function(callback) {
-	var params = {
-		InstanceID: this.instanceId
-	};
-	this.callAction('AVTransport', 'Next', params, callback || noop);
+  var params = {
+    InstanceID: this.instanceId
+  };
+  this.callAction('AVTransport', 'Next', params, callback || noop);
 };
 
 
@@ -256,27 +259,27 @@ MediaRendererClient.prototype.setVolume = function(volume, callback) {
 };
 
 MediaRendererClient.prototype.getMute = function(callback) {
-	this.callAction('RenderingControl', 'GetMute', { InstanceID: this.instanceId,Channel: 'Master'}, function(err, result) {
-		if(err) return callback(err);
-		callback(null, parseInt(result.CurrentMute));
-	});
+  this.callAction('RenderingControl', 'GetMute', { InstanceID: this.instanceId,Channel: 'Master'}, function(err, result) {
+    if(err) return callback(err);
+    callback(null, parseInt(result.CurrentMute));
+  });
 };
 
 
 MediaRendererClient.prototype.setMute = function(mute, callback) {
-	var params = {
-		InstanceID: this.instanceId,
-		Channel: 'Master',
-		DesiredMute: mute
-	};
-	this.callAction('RenderingControl', 'SetMute', params, callback || noop);
+  var params = {
+    InstanceID: this.instanceId,
+    Channel: 'Master',
+    DesiredMute: mute
+  };
+  this.callAction('RenderingControl', 'SetMute', params, callback || noop);
 };
 
 function formatTime(seconds) {
   var h = 0;
   var m = 0;
   var s = 0;
-  h = Math.floor((seconds - (h * 0)    - (m * 0 )) / 3600); 
+  h = Math.floor((seconds - (h * 0)    - (m * 0 )) / 3600);
   m = Math.floor((seconds - (h * 3600) - (m * 0 )) / 60);
   s =            (seconds - (h * 3600) - (m * 60));
 
@@ -327,10 +330,20 @@ function buildMetadata(metadata) {
     creator.text = metadata.creator;
   }
 
+  if(metadata.artist) {
+    var artist = et.SubElement(item, 'upnp:artist');
+    artist.text = metadata.artist;
+  }
+
+  var res = et.SubElement(item, 'res');
   if(metadata.url && metadata.protocolInfo) {
-    var res = et.SubElement(item, 'res');
     res.set('protocolInfo', metadata.protocolInfo);
     res.text = metadata.url;
+  }
+  if(metadata.duration){
+    res.set('duration', `${Math.floor(metadata.duration / 3600000)
+      }:${`0${Math.floor((metadata.duration % 3600000) / 60000)}`.slice(-2)
+      }:${`0${Math.round((metadata.duration % 60000) / 1000)}`.slice(-2)}`);
   }
 
   if(metadata.subtitlesUrl) {
